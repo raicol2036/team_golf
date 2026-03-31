@@ -45,20 +45,10 @@ db = init_firebase()
 # ======================
 @st.cache_resource
 def init_vision():
-from google.cloud import vision
-from google.oauth2 import service_account
-import streamlit as st
-
-@st.cache_resource
-def init_vision():
-    cfg = st.secrets["google_vision"]   # ❗不要轉 dict
+    cfg = st.secrets["google_vision"]
 
     credentials_obj = service_account.Credentials.from_service_account_info(dict(cfg))
 
-    return vision.ImageAnnotatorClient(credentials=credentials_obj)
-    cfg["private_key"] = cfg["private_key"].replace("\\n","\n")
-
-    credentials_obj = service_account.Credentials.from_service_account_info(cfg)
     return vision.ImageAnnotatorClient(credentials=credentials_obj)
 
 vision_client = init_vision()
