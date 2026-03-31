@@ -40,38 +40,62 @@ vision_client = init_vision()
 # =========================
 # OCR 辨識
 # =========================
-def ocr_scores(uploaded_file):
-    try:
-        if vision_client is None:
-            return None
+import re
+import numpy as np
 
-        image = Image.open(uploaded_file)
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='PNG')
+def smart_ocr_scores(raw_text):
+    """
+    自動解析：
+    1. 抓數字
+    2. 過濾異常值
+    3. 判斷橫/直格式
+    4. 自動分玩家
+    """
 
-        img = vision.Image(content=img_byte_arr.getvalue())
+    # =========================
+    # 1. 抓全部數字
+    # =========================
+    nums = re.findall(r'\d+', raw_text)
+    nums = [int(n) for n in nums]
 
-        response = vision_client.text_detection(image=img)
+    # =========================
+    # 2. 過濾合理桿數（1~12）
+    # =========================
+    nums = [n for n in nums if 1 <= n <= 12]
 
-        texts = response.text_annotations
-
-        if not texts:
-            return None
-
-        raw_text = texts[0].description
-
-        # 取出數字
-        nums = []
-        for t in raw_text.split():
-            if t.isdigit():
-                nums.append(int(t))
-
-        return nums if nums else None
-
-    except Exception as e:
-        st.error("OCR 失敗，請手動輸入")
+    if len(nums) < 18:
         return None
 
+    # =========================
+    # 3. 嘗試不同玩家數切分
+    # =========================
+    possible_players = []
+
+    for p in range(2, 7):  # 2~6人
+        if len(nums) >= 18 * p:
+            data = nums[:18 * p]
+            matrix = np.array(data).reshape(p, 18)
+            possible_players.append(matrix)
+
+    if not possible_players:
+        # fallback：單人18洞
+        return np.array(nums[:18]).reshape(1, 18)
+
+    # =========================
+    # 4. 判斷哪個最合理（平均落在3~8）
+    # =========================
+    best = None
+    best_score = 999
+
+    for m in possible_players:
+        avg = np.mean(m)
+        score = abs(avg - 5)  # 高爾夫平均約5桿
+
+        if score < best_score:
+            best_score = score
+            best = m
+
+    return best
 # =========================
 # Firebase 存資料
 # =========================
