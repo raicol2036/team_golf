@@ -27,17 +27,17 @@ def init_firebase():
         st.error("❌ Firebase 未設定")
         st.stop()
 
-    cfg = st.secrets["firebase"]
+    # ❗關鍵：先 copy 一份（不能直接改 secrets）
+    cfg = dict(st.secrets["firebase"])
 
-    cfg["private_key"] = cfg["private_key"].replace("\\n","\n")
+    # ✅ 再改 copy（這樣才合法）
+    cfg["private_key"] = cfg["private_key"].replace("\\n", "\n")
 
     if not firebase_admin._apps:
         cred = credentials.Certificate(cfg)
         firebase_admin.initialize_app(cred)
 
     return firestore.client()
-
-db = init_firebase()
 
 # ======================
 # 工具
