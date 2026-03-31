@@ -9,28 +9,24 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # ======================
-# 基本設定
+# 設定
 # ======================
-st.set_page_config(page_title="Golf System", layout="centered")
-st.title("⛳ Golf BANK Firebase版")
+st.set_page_config(page_title="Team Golf", layout="centered")
+st.title("⛳ 球隊成績系統")
 
 HOLES = [f"H{i}" for i in range(1,19)]
 PAR = [4,4,3,5,4,4,3,4,5,4,4,3,5,4,4,3,4,5]
 
 # ======================
-# Firebase（安全版）
+# Firebase
 # ======================
 @st.cache_resource
 def init_firebase():
-
     if "firebase" not in st.secrets:
         st.error("❌ Firebase 未設定")
         st.stop()
 
-    # ❗關鍵：先 copy 一份（不能直接改 secrets）
     cfg = dict(st.secrets["firebase"])
-
-    # ✅ 再改 copy（這樣才合法）
     cfg["private_key"] = cfg["private_key"].replace("\\n", "\n")
 
     if not firebase_admin._apps:
@@ -39,36 +35,30 @@ def init_firebase():
 
     return firestore.client()
 
+db = init_firebase()
+
 # ======================
 # 工具
 # ======================
-def now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
-
 def gen_id():
     return datetime.now().strftime("%y%m%d_%H%M%S")
 
-# ======================
-# QR（修正版）
-# ======================
 def make_qr(url):
     qr = qrcode.QRCode(box_size=8, border=2)
     qr.add_data(url)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    return img.convert("RGB")   # ⭐關鍵修正
+    return qr.make_image(fill_color="black", back_color="white").convert("RGB")
 
 # ======================
 # 計算
 # ======================
 def calc(df):
-
     df["總桿"] = df[HOLES].sum(axis=1)
     df["淨桿"] = df["總桿"] - df["差點"]
 
-    # Birdie
     df["Birdie"] = df.apply(
-        lambda r: sum([1 for i in range(18) if r[f"H{i+1}"] < PAR[i]]), axis=1
+        lambda r: sum([1 for i in range(18) if r[f"H{i+1}"] < PAR[i]]),
+        axis=1
     )
 
     df = df.sort_values("總桿").reset_index(drop=True)
@@ -80,9 +70,7 @@ def calc(df):
 # 冠亞軍限制
 # ======================
 def assign_awards(df, history):
-
-    champ = None
-    runner = None
+    champ, runner = None, None
 
     for _, r in df.iterrows():
         name = r["姓名"]
@@ -108,20 +96,16 @@ def assign_awards(df, history):
 # 分享圖
 # ======================
 def build_text(champ, runner, df, awards):
-
     lines = ["🏆 比賽結果"]
 
     if champ:
-        s = df[df["姓名"]==champ]["總桿"].values[0]
-        lines.append(f"🥇 {champ}（{s}）")
-
+        lines.append(f"🥇 {champ}")
     if runner:
-        s = df[df["姓名"]==runner]["總桿"].values[0]
-        lines.append(f"🥈 {runner}（{s}）")
+        lines.append(f"🥈 {runner}")
 
     lines.append("\n🏌️ Birdie")
-    for _,r in df.iterrows():
-        if r["Birdie"]>0:
+    for _, r in df.iterrows():
+        if r["Birdie"] > 0:
             lines.append(f"{r['姓名']} ×{r['Birdie']}")
 
     def add(title,data):
@@ -129,17 +113,16 @@ def build_text(champ, runner, df, awards):
         for p in data:
             lines.append(p)
 
-    add("🟠 遠距獎", awards["ld"])
+    add("🟠 遠距", awards["ld"])
     add("🥇 一近洞", awards["one"])
     add("🥈 二近洞", awards["two"])
     add("🥉 三近洞", awards["three"])
     add("🔵 N近洞", awards["n"])
-    add("❤️ 親密獎", awards["love"])
+    add("❤️ 親密", awards["love"])
 
     return "\n".join(lines)
 
 def text_to_img(text):
-
     lines = text.split("\n")
     img = Image.new("RGB",(800,40*len(lines)+80),(255,255,255))
     draw = ImageDraw.Draw(img)
@@ -162,39 +145,28 @@ def text_to_img(text):
 if "history" not in st.session_state:
     st.session_state.history = {}
 
-st.subheader("📌 建立比賽")
-
-app_url = st.text_input("App網址", "")
+APP_URL = st.text_input("App網址")
 
 game_id = st.text_input("比賽ID", gen_id())
 
-if st.button("建立"):
-    db.collection("golf_games").document(game_id).set({
-        "time": now()
-    })
-    st.success(f"已建立此賽：{game_id}")
+if st.button("建立比賽"):
+    db.collection("games").document(game_id).set({"created": str(datetime.now())})
+    st.success(f"已建立 {game_id}")
 
-# ======================
-# QR
-# ======================
-if app_url and game_id:
-
-    url = f"{app_url}?mode=view&game_id={game_id}"
-    qr = make_qr(url)
-
-    st.image(qr)  # ⭐已修正
+if APP_URL:
+    url = f"{APP_URL}?game_id={game_id}"
+    st.image(make_qr(url))
     st.code(url)
 
 # ======================
-# 成績輸入
+# 輸入
 # ======================
-st.subheader("✏️ 輸入")
-
 players = []
 names = []
 
-for i in range(4):
+st.subheader("輸入成績")
 
+for i in range(4):
     name = st.text_input(f"姓名{i+1}", f"P{i+1}")
     hcp = st.number_input(f"差點{i+1}",0,50,0)
 
@@ -216,10 +188,8 @@ for i in range(4):
 df = pd.DataFrame(players)
 
 # ======================
-# 獎項（無洞號）
+# 獎項
 # ======================
-st.subheader("🎯 獎項")
-
 def pick(title,n,key):
     st.markdown(title)
     return [st.selectbox(f"{title}{i}",names,key=f"{key}{i}") for i in range(n)]
@@ -236,7 +206,7 @@ awards = {
 # ======================
 # 計算
 # ======================
-if st.button("🔥 計算"):
+if st.button("計算"):
 
     result = calc(df)
 
@@ -248,16 +218,14 @@ if st.button("🔥 計算"):
 
     st.dataframe(result)
 
-    # 分享
     text = build_text(champ, runner, result, awards)
     img = text_to_img(text)
 
-    st.image(img.convert("RGB"))
+    st.image(img)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-
-    st.download_button("下載圖片", buf.getvalue(), "result.png")
+    st.download_button("下載結果", buf.getvalue(), "result.png")
 
 # ======================
 # 重置
