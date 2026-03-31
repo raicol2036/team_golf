@@ -1,0 +1,8 @@
+streamlit
+pandas
+qrcode
+pillow
+firebase-admin
+opencv-python
+pytesseract
+numpy
