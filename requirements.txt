@@ -1,8 +1,7 @@
 streamlit
 pandas
 qrcode
-pillow
+Pillow
 firebase-admin
-opencv-python
-pytesseract
-numpy
+google-cloud-vision
+streamlit-autorefresh
