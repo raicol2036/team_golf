@@ -142,45 +142,46 @@ if players:
         st.divider()
 
 # =========================
-# 🏆 結果（永遠出🔥）
+# 結果（穩定顯示🔥）
 # =========================
-if len(scores) >= 2:
+if scores:
 
     st.subheader("🏆 比賽結果")
 
     df = pd.DataFrame(scores).T
     df.columns = [f"H{i}" for i in range(1,19)]
 
-    # Gross
     df["Gross"] = df.sum(axis=1)
     gross_rank = df.sort_values("Gross")
 
+    # 防呆（避免人數不足）
+    if len(df) < 2:
+        st.warning("⚠️ 至少需要2位球員")
+        st.stop()
+
     gross_winners = list(gross_rank.index[:3])
 
-    # HCP
     df["HCP"] = df.index.map(get_hcp)
 
-    # Net（排除Gross得獎）
     net_players = [p for p in df.index if p not in gross_winners]
+
+    if len(net_players) < 2:
+        st.warning("⚠️ 淨桿人數不足")
+        st.stop()
 
     net_df = df.loc[net_players].copy()
     net_df["Net"] = net_df["Gross"] - net_df["HCP"]
     net_rank = net_df.sort_values("Net")
 
-    # 標記
-    df["Gross_Rank"] = ""
-    df["Net_Rank"] = ""
-
-    medals = ["🥇","🥈","🥉"]
-
-    for i,p in enumerate(gross_rank.index[:3]):
-        df.loc[p,"Gross_Rank"] = medals[i]
-
-    for i,p in enumerate(net_rank.index[:2]):
-        df.loc[p,"Net_Rank"] = medals[i]
-
     st.dataframe(df, use_container_width=True)
 
+    st.subheader("🏁 總表")
+
+    st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
+    st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
+
+    st.write(f"Net🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
+    st.write(f"Net🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
     # =========================
     # 總表
     # =========================
