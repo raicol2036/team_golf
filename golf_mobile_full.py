@@ -119,44 +119,66 @@ if players:
         st.divider()
 
 # =========================
-# 🏆 結果（修正版🔥）
+# 🏆 結果（最穩版🔥）
 # =========================
 st.write("目前有效人數：", len(scores))
 
 if len(scores) >= 2:
 
-    df = pd.DataFrame.from_dict(scores, orient="index", columns=["Gross"])
+    try:
+        df = pd.DataFrame.from_dict(scores, orient="index", columns=["Gross"])
+        df = df.sort_values("Gross")
 
-    df = df.sort_values("Gross")
+        gross_rank = df.copy()
+        gross_winners = list(gross_rank.index[:3])
 
-    gross_rank = df.copy()
-    gross_winners = list(gross_rank.index[:3])
+        # =========================
+        # HCP（防炸🔥）
+        # =========================
+        try:
+            df["HCP"] = df.index.map(get_hcp)
+        except:
+            df["HCP"] = 36
 
-    df["HCP"] = df.index.map(get_hcp)
-
-    net_players = [p for p in df.index if p not in gross_winners]
-
-    if len(net_players) >= 2:
-
-        net_df = df.loc[net_players].copy()
-        net_df["Net"] = net_df["Gross"] - net_df["HCP"]
-        net_rank = net_df.sort_values("Net")
-
-    else:
+        # =========================
+        # Net（防炸🔥）
+        # =========================
         net_rank = None
 
-    st.subheader("🏁 總表")
+        net_players = [p for p in df.index if p not in gross_winners]
 
-    st.markdown("### 🏆 Gross")
-    st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
+        if len(net_players) >= 2:
+            try:
+                net_df = df.loc[net_players].copy()
+                net_df["Net"] = net_df["Gross"] - net_df["HCP"]
+                net_rank = net_df.sort_values("Net")
+            except:
+                net_rank = None
 
-    if len(gross_rank) > 1:
-        st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
+        # =========================
+        # 顯示
+        # =========================
+        st.subheader("🏁 總表")
 
-    if net_rank is not None:
-        st.markdown("### 🏆 Net")
-        st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
-        st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
+        st.markdown("### 🏆 Gross")
+        st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
+
+        if len(gross_rank) > 1:
+            st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
+
+        if len(gross_rank) > 2:
+            st.write(f"🥉 {gross_rank.index[2]}（{gross_rank.iloc[2]['Gross']}）")
+
+        # Net
+        if net_rank is not None:
+            st.markdown("### 🏆 Net（排除Gross）")
+            st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
+            st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
+        else:
+            st.info("⚠️ 淨桿人數不足或資料異常")
+
+    except Exception as e:
+        st.error(f"系統錯誤：{e}")
     # =========================
     # 顯示
     # =========================
