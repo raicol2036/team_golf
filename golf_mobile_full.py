@@ -21,16 +21,16 @@ def init_firebase():
 db = init_firebase()
 
 # =========================
-# 球員資料（可改CSV）
+# 球員資料
 # =========================
 player_db = [
-    "謝旼達","張簡榮力","翁德奎","趙振明","洪忠宜","陳振峯","黃國書","巫吉生",
-    "張嘉原","陳威宇","林政翰","吳建輝","彭國強","陳振元","林佳緯","鄭振輝",
-    "蔡定融","謝依潔","湯淑蘭","范秀蘭","黃秀琴","林錫義","黃俊昇","來賓(J)"
+    "謝政達","張簡榮力","翁德全","趙振明","洪忠宜","陳振孝","黃國峯","巫吉生",
+    "張豪原","陳威宇","林政翰","吳建輝","彭國強","陳振元","林佳鋒","鄭振輝",
+    "蔡定憲","謝依榮","湯淑蘭","范秀蘭","黃秀琴","林錦義","黃俊昇","來賓(J)"
 ]
 
 # =========================
-# session state
+# Session 初始化
 # =========================
 if "selected_players" not in st.session_state:
     st.session_state.selected_players = []
@@ -56,7 +56,7 @@ def load_game(game_id):
 # =========================
 st.set_page_config(page_title="Golf System", layout="centered")
 
-st.title("⛳ Golf 即時比分系統（20人版）")
+st.title("⛳ Golf 即時比分系統（最終版）")
 
 mode = st.radio("模式", ["主控端", "查看端"])
 game_id = st.text_input("Game ID", "game001")
@@ -83,54 +83,62 @@ if mode == "主控端":
                 else:
                     st.warning("最多20位球員")
 
-    # 清除
     if st.button("🔄 清除選擇"):
         st.session_state.selected_players = []
 
-    # 顯示
-    st.subheader("📋 已選球員")
     players = st.session_state.selected_players
 
+    st.subheader("📋 已選球員")
     if players:
         st.write("、".join(players))
     else:
         st.info("尚未選擇")
 
     # =========================
-    # 輸入分數
+    # 輸入分數（連續18洞）
     # =========================
     if players:
-        st.subheader("✏️ 輸入成績（每人18洞）")
+        st.subheader("📱 輸入成績（連續18洞）")
 
         scores = []
 
-        for i, p in enumerate(players):
-            txt = st.text_input(f"{p}", key=f"score_{p}")
+        for p in players:
+            st.markdown(f"### ⛳ {p}")
 
-            if txt:
-                nums = [int(x) for x in re.findall(r'\d+', txt)]
+            txt = st.text_input(
+                f"{p}",
+                key=f"input_{p}",
+                placeholder="例如：455465445544654554"
+            )
 
-                if len(nums) == 18:
-                    scores.append(nums)
+            nums = [int(x) for x in txt if x.isdigit() and 1 <= int(x) <= 12]
+            nums = nums[:18]
+
+            # 顯示分格
+            cols = st.columns(6)
+            for h in range(18):
+                col = cols[h % 6]
+                if h < len(nums):
+                    col.metric(label=f"{h+1}", value=nums[h])
                 else:
-                    st.warning(f"{p} 需輸入18個數字")
+                    col.metric(label=f"{h+1}", value="-")
+
+            # 驗證
+            if len(nums) == 18:
+                st.success(f"{p} ✅ 完成")
+                scores.append(nums)
+            elif len(nums) > 0:
+                st.warning(f"{p} 已輸入 {len(nums)} / 18")
+
+            st.divider()
 
         # =========================
         # 顯示結果
         # =========================
         if len(scores) == len(players):
 
-            st.subheader("📊 成績表")
+            st.subheader("📊 成績總覽")
 
-            for i, p in enumerate(players):
-                df = pd.DataFrame({
-                    "Hole": range(1, 19),
-                    "Score": scores[i]
-                })
-                st.write(f"### {p}")
-                st.dataframe(df, use_container_width=True)
-
-            # 總桿
             totals = [sum(s) for s in scores]
 
             result_df = pd.DataFrame({
@@ -138,11 +146,9 @@ if mode == "主控端":
                 "Total": totals
             }).sort_values("Total")
 
-            st.subheader("🏆 排名")
             st.dataframe(result_df, use_container_width=True)
 
-            # 儲存
-            if st.button("💾 儲存"):
+            if st.button("💾 儲存比賽"):
                 save_game(game_id, players, scores)
                 st.success("已儲存")
 
