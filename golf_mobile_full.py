@@ -30,13 +30,13 @@ player_db = [
 ]
 
 # =========================
-# Session 初始化
+# Session
 # =========================
 if "selected_players" not in st.session_state:
     st.session_state.selected_players = []
 
 # =========================
-# Firebase function
+# Firebase
 # =========================
 def save_game(game_id, players, scores):
     data = {
@@ -56,7 +56,7 @@ def load_game(game_id):
 # =========================
 st.set_page_config(page_title="Golf System", layout="centered")
 
-st.title("⛳ Golf 即時比分系統（最終版）")
+st.title("⛳ Golf 即時比分系統")
 
 mode = st.radio("模式", ["主控端", "查看端"])
 game_id = st.text_input("Game ID", "game001")
@@ -95,60 +95,69 @@ if mode == "主控端":
         st.info("尚未選擇")
 
     # =========================
-    # 輸入分數（連續18洞）
+    # 兩人併列輸入
     # =========================
     if players:
+
         st.subheader("📱 輸入成績（連續18洞）")
 
         scores = []
+        temp_scores = {}
 
-        for p in players:
-            st.markdown(f"### ⛳ {p}")
+        for i in range(0, len(players), 2):
 
-            txt = st.text_input(
-                f"{p}",
-                key=f"input_{p}",
-                placeholder="例如：455465445544654554"
-            )
+            cols = st.columns(2)
 
-            nums = [int(x) for x in txt if x.isdigit() and 1 <= int(x) <= 12]
-            nums = nums[:18]
+            for j in range(2):
+                if i + j < len(players):
+                    p = players[i + j]
 
-            # 顯示分格
-            cols = st.columns(6)
-            for h in range(18):
-                col = cols[h % 6]
-                if h < len(nums):
-                    col.metric(label=f"{h+1}", value=nums[h])
-                else:
-                    col.metric(label=f"{h+1}", value="-")
+                    with cols[j]:
+                        st.markdown(f"### ⛳ {p}")
 
-            # 驗證
-            if len(nums) == 18:
-                st.success(f"{p} ✅ 完成")
-                scores.append(nums)
-            elif len(nums) > 0:
-                st.warning(f"{p} 已輸入 {len(nums)} / 18")
+                        txt = st.text_input(
+                            f"{p}",
+                            key=f"input_{p}",
+                            placeholder="455465445544654554"
+                        )
+
+                        nums = [int(x) for x in txt if x.isdigit() and 1 <= int(x) <= 12]
+                        nums = nums[:18]
+
+                        # 小型分格（簡化版）
+                        cols2 = st.columns(6)
+                        for h in range(18):
+                            col = cols2[h % 6]
+                            if h < len(nums):
+                                col.markdown(f"**{nums[h]}**")
+                            else:
+                                col.markdown("-")
+
+                        if len(nums) == 18:
+                            temp_scores[p] = nums
+                            st.success("完成")
+                        elif len(nums) > 0:
+                            st.warning(f"{len(nums)}/18")
 
             st.divider()
 
         # =========================
-        # 顯示結果
+        # 合併總表（重點）
         # =========================
-        if len(scores) == len(players):
+        if len(temp_scores) == len(players):
 
-            st.subheader("📊 成績總覽")
+            st.subheader("📊 成績總表")
 
-            totals = [sum(s) for s in scores]
+            df = pd.DataFrame(temp_scores).T
+            df.columns = [f"H{h}" for h in range(1, 19)]
+            df["Total"] = df.sum(axis=1)
 
-            result_df = pd.DataFrame({
-                "Player": players,
-                "Total": totals
-            }).sort_values("Total")
+            df = df.sort_values("Total")
 
-            st.dataframe(result_df, use_container_width=True)
+            st.dataframe(df, use_container_width=True)
 
             if st.button("💾 儲存比賽"):
+                scores = [temp_scores[p] for p in players]
                 save_game(game_id, players, scores)
                 st.success("已儲存")
 
@@ -162,23 +171,13 @@ if mode == "查看端":
     if data:
         st.subheader("📊 即時比分")
 
-        for player, sc in data["scores"].items():
-            df = pd.DataFrame({
-                "Hole": range(1, len(sc)+1),
-                "Score": sc
-            })
-            st.write(f"### {player}")
-            st.dataframe(df, use_container_width=True)
+        df = pd.DataFrame(data["scores"]).T
+        df.columns = [f"H{h}" for h in range(1, len(df.columns)+1)]
+        df["Total"] = df.sum(axis=1)
 
-        totals = {p: sum(sc) for p, sc in data["scores"].items()}
+        df = df.sort_values("Total")
 
-        result_df = pd.DataFrame({
-            "Player": list(totals.keys()),
-            "Total": list(totals.values())
-        }).sort_values("Total")
-
-        st.subheader("🏆 排名")
-        st.dataframe(result_df, use_container_width=True)
+        st.dataframe(df, use_container_width=True)
 
     else:
         st.warning("查無資料")
