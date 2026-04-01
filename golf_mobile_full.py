@@ -119,32 +119,44 @@ if players:
         st.divider()
 
 # =========================
-# 🏆 結果
+# 🏆 結果（修正版🔥）
 # =========================
-if scores:
+st.write("目前有效人數：", len(scores))
+
+if len(scores) >= 2:
 
     df = pd.DataFrame.from_dict(scores, orient="index", columns=["Gross"])
 
     df = df.sort_values("Gross")
 
-    # Gross 排名
     gross_rank = df.copy()
     gross_winners = list(gross_rank.index[:3])
 
-    # 差點
     df["HCP"] = df.index.map(get_hcp)
 
-    # Net（排除Gross得獎）
     net_players = [p for p in df.index if p not in gross_winners]
 
-    net_df = df.loc[net_players].copy()
+    if len(net_players) >= 2:
 
-    if len(net_df) >= 2:
+        net_df = df.loc[net_players].copy()
         net_df["Net"] = net_df["Gross"] - net_df["HCP"]
         net_rank = net_df.sort_values("Net")
+
     else:
         net_rank = None
 
+    st.subheader("🏁 總表")
+
+    st.markdown("### 🏆 Gross")
+    st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
+
+    if len(gross_rank) > 1:
+        st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
+
+    if net_rank is not None:
+        st.markdown("### 🏆 Net")
+        st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
+        st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
     # =========================
     # 顯示
     # =========================
