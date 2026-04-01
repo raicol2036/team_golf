@@ -1,135 +1,77 @@
-import streamlit as st
-import pandas as pd
-import re
-
-st.set_page_config(page_title="Golf System", layout="centered")
-st.title("🔥 Golf 容錯最強版")
-
 # =========================
-# 球員
-# =========================
-players_db = [
-    "謝政達","張簡榮力","翁德全","趙振明","洪忠宜",
-    "張豪原","陳振孝","林政翰","吳建輝","黃國峯"
-]
-
-if "players" not in st.session_state:
-    st.session_state.players = []
-
-# =========================
-# 選人
-# =========================
-st.subheader("👥 選人")
-
-cols = st.columns(4)
-for i,p in enumerate(players_db):
-    col = cols[i%4]
-
-    if p in st.session_state.players:
-        if col.button(f"✅ {p}", key=p):
-            st.session_state.players.remove(p)
-    else:
-        if col.button(p, key=p):
-            st.session_state.players.append(p)
-
-players = st.session_state.players
-st.write("已選：", "、".join(players))
-
-# =========================
-# 🔥 超強解析函數
-# =========================
-def parse_scores(text):
-
-    if not text:
-        return []
-
-    # 抓所有數字（支援空白/逗號/換行）
-    nums = re.findall(r"\d+", text)
-
-    nums = [int(n) for n in nums]
-
-    # 🔥 攤平成單字元（防 10 11）
-    flat = []
-    for n in nums:
-        if n >= 10:
-            flat.extend([int(x) for x in str(n)])
-        else:
-            flat.append(n)
-
-    # 🔥 保留合理桿數（1~12）
-    flat = [x for x in flat if 1 <= x <= 12]
-
-    # 🔥 補滿18
-    if len(flat) < 18:
-        flat += [0] * (18 - len(flat))
-
-    return flat[:18]
-
-# =========================
-# 輸入
-# =========================
-scores = {}
-
-if players:
-
-    st.subheader("📱 輸入（隨便貼🔥）")
-
-    for i in range(0, len(players), 2):
-
-        cols = st.columns(2)
-
-        for j in range(2):
-            if i+j < len(players):
-                p = players[i+j]
-
-                with cols[j]:
-
-                    col1,col2 = st.columns([3,1])
-
-                    with col1:
-                        st.markdown(f"### ⛳ {p}")
-
-                    txt = st.text_input("輸入18洞", key=f"in_{p}")
-
-                    nums = parse_scores(txt)
-
-                    valid_count = len([x for x in nums if x != 0])
-
-                    with col2:
-                        if valid_count >= 18:
-                            st.success("完成")
-                        else:
-                            st.info(f"{valid_count}/18")
-
-                    # 👉 不顯示分格（你要求）
-                    if valid_count > 0:
-                        scores[p] = nums
-
-        st.divider()
-
-# =========================
-# 🏆 結果（永遠顯示🔥）
+# 🏆 比賽結果（聯賽淨桿🔥）
 # =========================
 if len(scores) >= 2:
 
-    st.subheader("🏆 比賽結果")
+    st.subheader("🏆 比賽結果（聯賽版）")
 
     df = pd.DataFrame(scores).T
     df.columns = [f"H{i}" for i in range(1,19)]
 
-    df["Total"] = df.sum(axis=1)
+    # =========================
+    # 🎯 Gross
+    # =========================
+    df["Gross"] = df.sum(axis=1)
+    gross_rank = df.sort_values("Gross")
 
-    df = df.sort_values("Total")
+    gross_winners = list(gross_rank.index[:3])  # 冠亞季
 
-    # 名次
-    df["Rank"] = ""
+    # =========================
+    # 🎯 取得賽季差點（Firebase）
+    # =========================
+    def get_hcp(p):
+        if db is None:
+            return 36
+        doc = db.collection("season_hcp").document(p).get()
+        if doc.exists:
+            return doc.to_dict().get("hcp", 36)
+        return 36
 
-    ranks = ["🥇","🥈","🥉"]
+    def update_hcp(p, change):
+        if db is None:
+            return
+        h = get_hcp(p)
+        new_h = max(0, h + change)
 
-    for i,p in enumerate(df.index):
-        if i < 3:
-            df.loc[p,"Rank"] = ranks[i]
+        db.collection("season_hcp").document(p).set({
+            "hcp": new_h
+        })
 
+    df["HCP"] = df.index.map(get_hcp)
+
+    # =========================
+    # ❌ 排除 Gross 得獎者
+    # =========================
+    net_players = [p for p in df.index if p not in gross_winners]
+
+    net_df = df.loc[net_players].copy()
+
+    # =========================
+    # 🎯 Net
+    # =========================
+    net_df["Net"] = net_df["Gross"] - net_df["HCP"]
+
+    net_rank = net_df.sort_values("Net")
+
+    # =========================
+    # 🏆 標記
+    # =========================
+    df["Gross_Rank"] = ""
+    df["Net_Rank"] = ""
+
+    medals = ["🥇","🥈","🥉"]
+
+    # Gross
+    for i,p in enumerate(gross_rank.index[:3]):
+        df.loc[p,"Gross_Rank"] = medals[i]
+
+    # Net（只2名）
+    for i,p in enumerate(net_rank.index[:2]):
+        df.loc[p,"Net_Rank"] = medals[i]
+
+    # =========================
+    # 📊 顯示
+    # =========================
     st.dataframe(df, use_container_width=True)
 
     # =========================
@@ -137,6 +79,23 @@ if len(scores) >= 2:
     # =========================
     st.subheader("🏁 總表")
 
-    st.write(f"🥇 冠軍：{df.index[0]}（{df.iloc[0]['Total']}桿）")
-    st.write(f"🥈 亞軍：{df.index[1]}（{df.iloc[1]['Total']}桿）")
-    st.write(f"🥉 季軍：{df.index[2]}（{df.iloc[2]['Total']}桿）")
+    st.markdown("### 🏆 Gross")
+    st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}桿）")
+    st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}桿）")
+
+    st.markdown("### 🏆 Net（排除Gross得獎）")
+    st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
+    st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
+
+    # =========================
+    # 💾 更新賽季差點
+    # =========================
+    if st.button("💾 更新賽季差點"):
+
+        # 淨桿冠軍 -2
+        update_hcp(net_rank.index[0], -2)
+
+        # 淨桿亞軍 -1
+        update_hcp(net_rank.index[1], -1)
+
+        st.success("✅ 差點已更新")
