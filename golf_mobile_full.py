@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # =========================
-# Firebase
+# Firebase（穩定版）
 # =========================
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -24,16 +24,16 @@ db = init_firebase()
 # =========================
 # 頁面
 # =========================
-st.set_page_config(page_title="Golf System", layout="centered")
-st.title("🔥 Golf 聯賽系統（總桿版）")
+st.set_page_config(page_title="Golf League", layout="centered")
+st.title("🔥 Golf 正式比賽系統")
 
 # =========================
 # 球員
 # =========================
 player_db = [
-    "謝政達","張簡榮力","翁德全","趙振明","洪忠宜",
-    "張豪原","陳振孝","林政翰","吳建輝","黃國峯",
-    "陳振元","林佳鋒","鄭振輝","蔡定憲","謝依榮",
+    "謝政達","張簡榮力","翁德全","趙振明","洪忠宜","陳振孝",
+    "黃國峯","巫吉生","張豪原","陳威宇","林政翰","吳建輝",
+    "彭國強","陳振元","林佳鋒","鄭振輝","蔡定憲","謝依榮",
     "湯淑蘭","范秀蘭"
 ]
 
@@ -61,22 +61,26 @@ players = st.session_state.players
 st.write("已選：", "、".join(players))
 
 # =========================
-# Firebase 差點
+# 差點（Firebase）
 # =========================
 def get_hcp(p):
-    if db is None:
-        return 36
-    doc = db.collection("season_hcp").document(p).get()
-    if doc.exists:
-        return doc.to_dict().get("hcp",36)
+    try:
+        if db:
+            doc = db.collection("season_hcp").document(p).get()
+            if doc.exists:
+                return doc.to_dict().get("hcp",36)
+    except:
+        pass
     return 36
 
 def update_hcp(p, delta):
-    if db is None:
-        return
-    h = get_hcp(p)
-    new_h = max(0, h + delta)
-    db.collection("season_hcp").document(p).set({"hcp":new_h})
+    try:
+        if db:
+            h = get_hcp(p)
+            new_h = max(0, h + delta)
+            db.collection("season_hcp").document(p).set({"hcp":new_h})
+    except:
+        pass
 
 # =========================
 # 輸入總桿
@@ -97,29 +101,27 @@ if players:
 
                 with cols[j]:
 
-                    col1,col2 = st.columns([3,1])
+                    c1,c2 = st.columns([3,1])
 
-                    with col1:
+                    with c1:
                         st.markdown(f"### ⛳ {p}")
 
                     val = st.text_input("總桿", key=f"score_{p}")
 
-                    try:
+                    if val.isdigit():
                         val = int(val)
-                    except:
-                        val = None
-
-                    with col2:
-                        if val:
-                            st.success("完成")
-
-                    if val:
                         scores[p] = val
+
+                        with c2:
+                            st.success("完成")
+                    else:
+                        with c2:
+                            st.info("輸入中")
 
         st.divider()
 
 # =========================
-# 🏆 結果（最穩版🔥）
+# 🏆 結果（穩定版🔥）
 # =========================
 st.write("目前有效人數：", len(scores))
 
@@ -132,19 +134,14 @@ if len(scores) >= 2:
         gross_rank = df.copy()
         gross_winners = list(gross_rank.index[:3])
 
-        # =========================
-        # HCP（防炸🔥）
-        # =========================
+        # HCP
         try:
             df["HCP"] = df.index.map(get_hcp)
         except:
             df["HCP"] = 36
 
-        # =========================
-        # Net（防炸🔥）
-        # =========================
+        # Net
         net_rank = None
-
         net_players = [p for p in df.index if p not in gross_winners]
 
         if len(net_players) >= 2:
@@ -153,7 +150,7 @@ if len(scores) >= 2:
                 net_df["Net"] = net_df["Gross"] - net_df["HCP"]
                 net_rank = net_df.sort_values("Net")
             except:
-                net_rank = None
+                pass
 
         # =========================
         # 顯示
@@ -162,51 +159,24 @@ if len(scores) >= 2:
 
         st.markdown("### 🏆 Gross")
         st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
-
         if len(gross_rank) > 1:
             st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
-
         if len(gross_rank) > 2:
             st.write(f"🥉 {gross_rank.index[2]}（{gross_rank.iloc[2]['Gross']}）")
 
-        # Net
         if net_rank is not None:
             st.markdown("### 🏆 Net（排除Gross）")
             st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
             st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
+
+            # 更新差點
+            if st.button("💾 更新賽季差點"):
+                update_hcp(net_rank.index[0], -2)
+                update_hcp(net_rank.index[1], -1)
+                st.success("✅ 差點已更新")
+
         else:
-            st.info("⚠️ 淨桿人數不足或資料異常")
+            st.info("⚠️ 淨桿人數不足")
 
     except Exception as e:
         st.error(f"系統錯誤：{e}")
-    # =========================
-    # 顯示
-    # =========================
-    st.subheader("🏆 比賽結果")
-    st.dataframe(df, use_container_width=True)
-
-    # =========================
-    # 總表
-    # =========================
-    st.subheader("🏁 總表")
-
-    st.markdown("### 🏆 Gross")
-    st.write(f"🥇 {gross_rank.index[0]}（{gross_rank.iloc[0]['Gross']}）")
-    if len(gross_rank) > 1:
-        st.write(f"🥈 {gross_rank.index[1]}（{gross_rank.iloc[1]['Gross']}）")
-
-    if net_rank is not None:
-
-        st.markdown("### 🏆 Net（排除Gross）")
-        st.write(f"🥇 {net_rank.index[0]}（{net_rank.iloc[0]['Net']}）")
-        st.write(f"🥈 {net_rank.index[1]}（{net_rank.iloc[1]['Net']}）")
-
-        # =========================
-        # 更新差點
-        # =========================
-        if st.button("💾 更新賽季差點"):
-
-            update_hcp(net_rank.index[0], -2)
-            update_hcp(net_rank.index[1], -1)
-
-            st.success("✅ 差點已更新")
