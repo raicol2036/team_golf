@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import re
 
 # Firebase
@@ -22,7 +21,22 @@ def init_firebase():
 db = init_firebase()
 
 # =========================
-# 存資料
+# 球員資料（可改CSV）
+# =========================
+player_db = [
+    "謝政達","張簡榮力","翁德全","趙振明","洪忠宜","陳振孝","黃國峯","巫吉生",
+    "張豪原","陳威宇","林政翰","吳建輝","彭國強","陳振元","林佳鋒","鄭振輝",
+    "蔡定憲","謝依榮","湯淑蘭","范秀蘭","黃秀琴","林錦義","黃俊昇","來賓(J)"
+]
+
+# =========================
+# session state
+# =========================
+if "selected_players" not in st.session_state:
+    st.session_state.selected_players = []
+
+# =========================
+# Firebase function
 # =========================
 def save_game(game_id, players, scores):
     data = {
@@ -31,9 +45,6 @@ def save_game(game_id, players, scores):
     }
     db.collection("golf_games").document(game_id).set(data)
 
-# =========================
-# 讀資料
-# =========================
 def load_game(game_id):
     doc = db.collection("golf_games").document(game_id).get()
     if doc.exists:
@@ -45,10 +56,9 @@ def load_game(game_id):
 # =========================
 st.set_page_config(page_title="Golf System", layout="centered")
 
-st.title("⛳ Golf 即時比分系統（快速輸入版）")
+st.title("⛳ Golf 即時比分系統（20人版）")
 
 mode = st.radio("模式", ["主控端", "查看端"])
-
 game_id = st.text_input("Game ID", "game001")
 
 # =========================
@@ -56,58 +66,85 @@ game_id = st.text_input("Game ID", "game001")
 # =========================
 if mode == "主控端":
 
-    players_input = st.text_input("球員（逗號分隔）", "A,B,C,D")
-    players = [p.strip() for p in players_input.split(",") if p.strip()]
+    st.subheader("👥 選擇球員（最多20人）")
 
-    st.subheader("✏️ 快速輸入（每人18洞）")
+    cols = st.columns(4)
 
-    scores = []
+    for i, player in enumerate(player_db):
+        col = cols[i % 4]
 
-    for i, p in enumerate(players):
-        txt = st.text_input(f"{p} 成績（18位數）", key=f"p{i}")
+        if player in st.session_state.selected_players:
+            if col.button(f"✅ {player}", key=player):
+                st.session_state.selected_players.remove(player)
+        else:
+            if col.button(player, key=player):
+                if len(st.session_state.selected_players) < 20:
+                    st.session_state.selected_players.append(player)
+                else:
+                    st.warning("最多20位球員")
 
-        if txt:
-            nums = [int(x) for x in re.findall(r'\d+', txt)]
+    # 清除
+    if st.button("🔄 清除選擇"):
+        st.session_state.selected_players = []
 
-            if len(nums) == 18:
-                scores.append(nums)
-            else:
-                st.warning(f"{p} 必須輸入18個數字")
+    # 顯示
+    st.subheader("📋 已選球員")
+    players = st.session_state.selected_players
+
+    if players:
+        st.write("、".join(players))
+    else:
+        st.info("尚未選擇")
 
     # =========================
-    # 顯示結果
+    # 輸入分數
     # =========================
-    if len(scores) == len(players):
+    if players:
+        st.subheader("✏️ 輸入成績（每人18洞）")
 
-        st.subheader("📊 成績")
+        scores = []
 
         for i, p in enumerate(players):
-            df = pd.DataFrame({
-                "Hole": range(1, 19),
-                "Score": scores[i]
-            })
-            st.write(f"### {p}")
-            st.dataframe(df, use_container_width=True)
+            txt = st.text_input(f"{p}", key=f"score_{p}")
+
+            if txt:
+                nums = [int(x) for x in re.findall(r'\d+', txt)]
+
+                if len(nums) == 18:
+                    scores.append(nums)
+                else:
+                    st.warning(f"{p} 需輸入18個數字")
 
         # =========================
-        # 總桿
+        # 顯示結果
         # =========================
-        totals = [sum(s) for s in scores]
+        if len(scores) == len(players):
 
-        result_df = pd.DataFrame({
-            "Player": players,
-            "Total": totals
-        }).sort_values("Total")
+            st.subheader("📊 成績表")
 
-        st.subheader("🏆 總桿排名")
-        st.dataframe(result_df, use_container_width=True)
+            for i, p in enumerate(players):
+                df = pd.DataFrame({
+                    "Hole": range(1, 19),
+                    "Score": scores[i]
+                })
+                st.write(f"### {p}")
+                st.dataframe(df, use_container_width=True)
 
-        # =========================
-        # 存 Firebase
-        # =========================
-        if st.button("💾 儲存比賽"):
-            save_game(game_id, players, scores)
-            st.success("✅ 已儲存")
+            # 總桿
+            totals = [sum(s) for s in scores]
+
+            result_df = pd.DataFrame({
+                "Player": players,
+                "Total": totals
+            }).sort_values("Total")
+
+            st.subheader("🏆 排名")
+            st.dataframe(result_df, use_container_width=True)
+
+            # 儲存
+            if st.button("💾 儲存"):
+                save_game(game_id, players, scores)
+                st.success("已儲存")
 
 # =========================
 # 查看端
@@ -127,7 +164,6 @@ if mode == "查看端":
             st.write(f"### {player}")
             st.dataframe(df, use_container_width=True)
 
-        # 總桿
         totals = {p: sum(sc) for p, sc in data["scores"].items()}
 
         result_df = pd.DataFrame({
